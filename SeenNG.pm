@@ -1,4 +1,8 @@
 # Module: SeenNG. See below for documentation.
+# ############################
+#   THIS HAS A HOOK THAT
+#      NEEDS A MODIFIED AUTO
+# ############################
 # Copyright (C) 2014 isolation
 # This program is free software. It is released under the same
 #   licensing terms as Auto itself.
