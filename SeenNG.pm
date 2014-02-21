@@ -141,9 +141,9 @@ sub on_kick {
     my ($src, $chan, $kickee, $reason) = @_;
     my $time = time();
 
-    # TODO: find a way to fix this
     # kickee
-    db_add($src->{svr}, $kickee, "reallyneed", "tofixthis", $time, "kicked",
+    db_add($src->{svr}, $kickee, $State::IRC::userinfo{$src->{svr}}{lc $kickee}{user},
+        $State::IRC::userinfo{$src->{svr}}{lc $kickee}{host}, $time, "kicked",
         $chan, $reason, $src->{nick});
     # kicker
     db_add($src->{svr}, $src->{nick}, $src->{user}, $src->{host}, $time,
