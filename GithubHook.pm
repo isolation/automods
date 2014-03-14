@@ -221,6 +221,43 @@ sub colorfy {
     return $rcolors[$sum % 9];
 }
 
-API::Std::mod_init('GithubHook', 'Ootig', '1.0', '3.0.0a11');
+API::Std::mod_init('GithubHook', 'isolation', '1.1', '3.0.0a11');
 
 __END__
+
+=head1 NAME
+
+GithubHook - Announces GitHub commits.
+
+=head1 VERSION
+
+1.1
+
+=head1 SYNOPSIS
+
+< automato> isolation/automods (in master) 37fdf24 isolation: added GithubHook to repo http://git.io/mCMKNA
+
+=head1 DESCRIPTION
+
+A script listening on a web server handles Github webhook
+events and populates a database with the info. This script
+checks that database every 10 seconds and announces any
+new events. It clears the database once the commits have
+been announced.
+
+As currently written, the script will need to be able to
+modify the bot's own database. This is a gaping security
+hole.
+
+=head1 AUTHOR
+
+This module was written by isolation.
+
+=head1 LICENSE AND COPYRIGHT
+
+This module is Copyright 2014 isolation.
+
+This module is released under the same licensing terms as Auto itself.
+
+=cut
+
