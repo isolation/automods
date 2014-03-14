@@ -218,7 +218,7 @@ sub colorfy {
     my @rcolors = ("19", "20", "22", "24", "25", "26", "27", "28", "29");
     my $sum = 0;
     $sum += ord $_ for (split "", $_[0]);
-    return $rcolors[$sum %= 9];
+    return $rcolors[$sum % 9];
 }
 
 API::Std::mod_init('GithubHook', 'Ootig', '1.0', '3.0.0a11');
