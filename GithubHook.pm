@@ -94,7 +94,7 @@ sub do_dbcheck {
             "/" .
             "\x{03}" . colorfy($repo_name) . $repo_name . "\x{03}" .
             " (in " . $row->{'ref'} . ") " .
-            "\x{03}" . colorfy($row->{'id'}) . $row->{'id'} . "\x{03}" . 
+            "\x{03}12" . $row->{'id'} . "\x{03}" . 
             " " . $row->{'author_name'} . ": " .
             $row->{'message'} .
             " " . $url);
