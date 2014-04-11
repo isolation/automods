@@ -10,12 +10,16 @@ package M::SeenNG;
 use 5.010;
 use strict;
 use warnings;
-use API::Std qw(hook_add hook_del cmd_add cmd_del);
+use API::Std qw(hook_add hook_del cmd_add cmd_del conf_get);
 use API::IRC qw(notice privmsg);
 use API::Log qw(slog dbug);
-use Time::Duration qw(ago);
+use Time::Duration qw(ago duration);
+my ($ALTS_DIR, $ALTS_URL);
 
 sub _init {
+    $ALTS_DIR = (conf_get('seenng:alts_dir'))[0][0];
+    $ALTS_URL = (conf_get('seenng:alts_url'))[0][0];
+
     $Auto::DB->do(
         'CREATE TABLE IF NOT EXISTS seenng(
         net     TEXT NOT NULL COLLATE NOCASE,
@@ -82,6 +86,14 @@ sub _init {
         \&M::SeenNG::cmd_seennick) or return;
     cmd_add('LASTSPOKE', 2, 0, \%M::SeenNG::HELP_LASTSPOKE,
         \&M::SeenNG::cmd_lastspoke) or return;
+    cmd_add('SEENSTATS', 2, 0, \%M::SeenNG::HELP_SEENSTATS,
+        \&M::SeenNG::cmd_seenstats) or return;
+    cmd_add('NETSTATS', 2, 0, \%M::SeenNG::HELP_NETSTATS,
+        \&M::SeenNG::cmd_netstats) or return;
+    cmd_add('CHANSTATS', 2, 0, \%M::SeenNG::HELP_CHANSTATS,
+        \&M::SeenNG::cmd_chanstats) or return;
+    cmd_add('ALTS', 2, 0, \%M::SeenNG::HELP_ALTS, \&M::SeenNG::cmd_alts)
+        or return;
 
     return 1;
 }
@@ -101,6 +113,10 @@ sub _void {
     cmd_del('SEEN') or return;
     cmd_del('SEENNICK') or return;
     cmd_del('LASTSPOKE') or return;
+    cmd_del('SEENSTATS') or return;
+    cmd_del('NETSTATS') or return;
+    cmd_del('CHANSTATS') or return;
+    cmd_del('ALTS') or return;
 
     $Auto::DB->do('DROP TABLE seenng_temp') or return;
 
@@ -111,12 +127,28 @@ our %HELP_SEEN = (
     en => "This is a seen command. It takes nicks or masks.",
 );
 
-our %HELP_SEEN = (
+our %HELP_SEENNICK = (
     en => "This is a seen command. It only takes nicks.",
 );
 
 our %HELP_LASTSPOKE = (
     en => "This command says the last time a nick spoke in a channel.",
+);
+
+our %HELP_SEENSTATS = (
+    en => "Shows statistics about the seen database.",
+);
+
+our %HELP_NETSTATS = (
+    en => "Shows statistics about the current network's seen entries.",
+);
+
+our %HELP_CHANSTATS = (
+    en => "Shows statistics about the current channel's seen entries.",
+);
+
+our %HELP_ALTS = (
+    en => "Lists a nick's possible alternate nicks.",
 );
 
 sub on_cprivmsg {
@@ -183,7 +215,7 @@ sub on_join {
 sub on_part {
     my ($src, $chan, $msg) = @_;
 
-    my $reason = ($msg ? $msg : undef);
+    my $reason = ($msg ? $msg : "");
     db_add($src->{svr}, $src->{nick}, $src->{user}, $src->{host}, time(),
         "part", $chan, $reason, undef);
     memdb_del(0, $src->{svr}, $src->{nick}, $chan);
@@ -220,6 +252,8 @@ sub on_iquit {
 
 # empty but leaving this here anyway
 sub on_rehash {
+    $ALTS_DIR = (conf_get('seenng:alts_dir'))[0][0];
+    $ALTS_URL = (conf_get('seenng:alts_url'))[0][0];
 }
 
 sub memdb_add {
@@ -587,6 +621,221 @@ sub cmd_lastspoke {
         }
     }
 }
+
+# info needed by all 3 *stats commands
+sub stats_total_entries {
+    my $sth = $Auto::DB->prepare('
+        SELECT COUNT(*) AS count
+        FROM seenng
+    ');
+    $sth->execute;
+    return $sth->fetchrow_hashref->{'count'};
+}
+
+sub cmd_seenstats {
+    my ($src, @argv) = @_;
+
+    # find oldest entry
+    my $sth = $Auto::DB->prepare('
+        SELECT min(time) AS mintime, nick
+        FROM seenng
+    ');
+    $sth->execute();
+    my $oldest_data = $sth->fetchrow_hashref;
+    my $oldest_ago = ago(time - $oldest_data->{mintime});
+    my $oldest_nick = $oldest_data->{nick};
+
+    # get total number of db entries
+    my $total_entries = stats_total_entries();
+
+    # get total number of distinct user@host combos
+    $sth = $Auto::DB->prepare('
+        SELECT COUNT(*) AS uniquehosts
+        FROM (
+            SELECT DISTINCT user, host
+            FROM seenng
+        )
+    ');
+    $sth->execute();
+    my $unique_hosts = $sth->fetchrow_hashref->{uniquehosts};
+
+    # send off the input
+    privmsg($src->{svr}, $src->{chan}, "Currently I am tracking " .
+        $total_entries . " nicks, which comprise " . $unique_hosts .
+        " unique hosts. The oldest record is " . $oldest_nick .
+        "'s, which is from " . $oldest_ago . ".");
+    return 1;
+}
+
+sub cmd_netstats {
+    my ($src, @argv) = @_;
+
+    # find oldest entry
+    my $sth = $Auto::DB->prepare('
+        SELECT min(time) AS mintime
+        FROM seenng
+        WHERE net = ?
+    ');
+    $sth->execute($src->{svr});
+    my $oldest_data = $sth->fetchrow_hashref;
+    my $oldest_ago = duration(time - $oldest_data->{mintime});
+
+    # get total number of db entries
+    my $total_entries = stats_total_entries();
+
+    # get number of db entries from network
+    $sth = $Auto::DB->prepare('
+        SELECT COUNT(*) AS count
+        FROM seenng
+        WHERE net = ?
+    ');
+    $sth->execute($src->{svr});
+    my $network_entries = $sth->fetchrow_hashref->{count};
+
+    # get total number of distinct user@host combos
+    $sth = $Auto::DB->prepare('
+        SELECT COUNT(*) AS uniquehosts
+        FROM (
+            SELECT DISTINCT user, host
+            FROM seenng
+            WHERE net = ?
+        )
+    ');
+    $sth->execute($src->{svr});
+    my $unique_hosts = $sth->fetchrow_hashref->{uniquehosts};
+
+    my $percent = 100 * ($network_entries / $total_entries);
+    my $rounded = sprintf("%.0f", $percent);
+
+    # send off the input
+    privmsg($src->{svr}, $src->{chan}, $src->{svr} . " is the source of " .
+        "$rounded% ($network_entries/$total_entries) of the seen database " .
+        "entries. On " . $src->{svr} . ", there were a total of " .
+        $unique_hosts . " unique uhosts seen in the past $oldest_ago.");
+    return 1;
+}
+
+sub cmd_chanstats {
+    my ($src, @argv) = @_;
+
+    # find oldest entry
+    my $sth = $Auto::DB->prepare('
+        SELECT min(time) AS mintime
+        FROM seenng
+        WHERE net = ? AND chan = ?
+    ');
+    $sth->execute($src->{svr}, $src->{chan});
+    my $oldest_data = $sth->fetchrow_hashref;
+    my $oldest_ago = duration(time - $oldest_data->{mintime});
+
+    # get total number of db entries
+    my $total_entries = stats_total_entries();
+
+    # get number of db entries from channel
+    $sth = $Auto::DB->prepare('
+        SELECT COUNT(*) AS count
+        FROM seenng
+        WHERE net = ? AND chan = ?
+    ');
+    $sth->execute($src->{svr}, $src->{chan});
+    my $channel_entries = $sth->fetchrow_hashref->{count};
+
+    # get total number of distinct user@host combos
+    $sth = $Auto::DB->prepare('
+        SELECT COUNT(*) AS uniquehosts
+        FROM (
+            SELECT DISTINCT user, host
+            FROM seenng
+            WHERE net = ? AND chan = ?
+        )
+    ');
+    $sth->execute($src->{svr}, $src->{chan});
+    my $unique_hosts = $sth->fetchrow_hashref->{uniquehosts};
+
+    my $percent = 100 * ($channel_entries / $total_entries);
+    my $rounded = sprintf("%.0f", $percent);
+
+    # send off the input
+    privmsg($src->{svr}, $src->{chan}, $src->{chan} . " is the source of " .
+        "$rounded% ($channel_entries/$total_entries) of the seen database " .
+        "entries. In " . $src->{chan} . ", there were a total of " .
+        $unique_hosts . " unique uhosts seen in the past $oldest_ago.");
+    return 1;
+}
+
+sub cmd_alts {
+    my ($src, @argv) = @_;
+    my @results;
+
+    # if no arg, run on person using command
+    if (!defined $argv[0]) {
+        $argv[0] = $src->{'nick'};
+    }
+
+    my $sth = $Auto::DB->prepare('
+        SELECT user, host
+	FROM seenng
+	WHERE net = ? AND nick = ?
+    ');
+    $sth->execute($src->{svr}, $argv[0]);
+    my $data = $sth->fetchrow_hashref;
+
+    my $wchost = $data->{'host'};
+    $wchost =~ s/^[^\.]*\./%\./;
+
+    $sth = $Auto::DB->prepare('
+        SELECT nick
+	FROM seenng
+	WHERE net = ? AND user LIKE ? AND host LIKE ?
+	ORDER BY time ASC
+    ');
+    $sth->execute($src->{svr}, $data->{'user'}, $wchost);
+    while (my $row = $sth->fetchrow_hashref) {
+        push(@results, $row->{'nick'});
+    }
+
+    $sth->execute($src->{svr}, '%', $data->{'host'});
+    while (my $row = $sth->fetchrow_hashref) {
+        push(@results, $row->{'nick'} . "*");
+    }
+
+    my (%seen, @r);
+    # pulled this straight from the old, bad seen script
+    foreach my $a (@results) {
+        (my $b = $a) =~ s/\*$//;
+	unless ($seen{$b}) {
+            push(@r, $a);
+	    $seen{$a} = 1;
+	}
+    }
+
+    my $rescount = @r;
+    if ($rescount > 30) {
+        my $resultsout = join("\n", @r);
+	my $len_string = 8;
+	my @chars = ('a'..'z','A'..'Z','0'..'9','_');
+	my $random_string;
+	foreach (1..$len_string) {
+            $random_string .= $chars[rand @chars];
+        }
+	open (RESFILE, ">$ALTS_DIR$random_string.txt");
+	print RESFILE "### " . $random_string . ".txt " . gmtime . "\n";
+	print RESFILE "### " . $src->{nick} . " query: " . $argv[0] . "\n";
+	print RESFILE $resultsout;
+	close (RESFILE);
+	privmsg($src->{svr}, $src->{chan}, $ALTS_URL . $random_string . ".txt (" .
+            $rescount . " results)");
+        return 1;
+    }
+    elsif ($rescount > 0) {
+        my $resultsout = join(', ', @r);
+	privmsg($src->{svr}, $src->{chan}, "alts (" . $rescount . "): " . $resultsout);
+        return 1;
+    }
+    return 1;
+}
+
+
 
 sub msg_formatter {
     my ($src, $premsg, $data) = @_;
