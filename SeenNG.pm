@@ -375,6 +375,10 @@ sub seen_logic {
     } elsif ($argv[0] =~ /[\*\?!]/) {
         complex_seen_logic($src, @argv);
         return;
+    # person asked for nick that's in the channel
+    } elsif (defined $State::IRC::chanusers{$src->{svr}}{$src->{chan}}{lc($argv[0])}) {
+        privmsg($src->{svr}, $src->{chan}, $src->{nick} . ", $argv[0] is right here!");
+        return;
     # nick not found in database
     } elsif (!in_db($src->{svr}, $argv[0])) {
         privmsg($src->{svr}, $src->{chan}, "I don't remember seeing " .
@@ -843,7 +847,7 @@ sub msg_formatter {
     my $message = $premsg . $data->{nick} . " (" . $data->{user} . "@" . $data->{host} .
         ") was last seen";
     my $endmsg;
-    if ($State::IRC::chanusers{$data->{net}}{$data->{chan}}{lc($data->{user})}) {
+    if ($State::IRC::chanusers{$data->{net}}{$data->{chan}}{lc($data->{nick})}) {
         $endmsg = ". " . $data->{nick} . " is still on " . $data->{chan} . ".";
     }
     given ($data->{event}) {
