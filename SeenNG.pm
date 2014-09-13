@@ -11,7 +11,7 @@ use 5.010;
 use strict;
 use warnings;
 use API::Std qw(hook_add hook_del cmd_add cmd_del conf_get);
-use API::IRC qw(notice privmsg);
+use API::IRC qw(notice privmsg act);
 use API::Log qw(slog dbug);
 use Time::Duration qw(ago duration);
 my ($ALTS_DIR, $ALTS_URL);
@@ -889,7 +889,7 @@ sub msg_formatter {
             privmsg($src->{svr}, $src->{chan}, $message .
                 " changing nicks from " . $data->{message} . " " . $ago . ".");
         } default {
-            privmsg($src->{svr}, $src->{chan}, "\001ACTION stares at database (p3)\001");
+            act($src->{svr}, $src->{chan}, "stares at database (p3)");
         }
     }
 }
