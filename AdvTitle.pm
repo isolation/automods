@@ -25,6 +25,11 @@ sub _init {
     cmd_add('ADVTITLE', 2, 'cmd.advtitle', \%M::AdvTitle::HELP_ADVTITLE, \&M::AdvTitle::cmd_toggle) or return;
     hook_add('on_cprivmsg', 'advtitle.urlscan', \&M::AdvTitle::director) or return;
 
+    unless (conf_get('advtitle:tw_consumer') && conf_get('advtitle:tw_consumer_secret') &&
+        conf_get('advtitle:tw_access_token') && conf_get('advtitle:tw_access_token_secret')) {
+        err(2, "AdvTitle: twitter oauth keys missing", 0);
+    }
+
     $TW_CON_KEY = (conf_get('advtitle:tw_consumer'))[0][0];
     $TW_CON_SEC = (conf_get('advtitle:tw_consumer_secret'))[0][0];
     $TW_ACC_TOK = (conf_get('advtitle:tw_access_token'))[0][0];
@@ -178,7 +183,7 @@ sub chan_allowed {
     return 0;
 }
 
-API::Std::mod_init('AdvTitle', 'isolation', '1.0', '3.0.0a11');
+API::Std::mod_init('AdvTitle', 'isolation', '1.1', '3.0.0a11');
 
 __END__
 
