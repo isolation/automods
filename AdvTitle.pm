@@ -6,7 +6,7 @@ package M::AdvTitle;
 use strict;
 use warnings;
 use 5.010;
-use API::Std qw(hook_add hook_del cmd_add cmd_del conf_get);
+use API::Std qw(hook_add hook_del cmd_add cmd_del conf_get err);
 use API::IRC qw(privmsg);
 use POSIX; # sec_to_time() uses strftime
 use HTML::Entities;
