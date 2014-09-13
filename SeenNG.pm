@@ -589,7 +589,7 @@ sub cmd_lastspoke {
         return;
     # they're in the channel but haven't done anything since the script loaded
     } elsif (!in_memdb($src->{svr}, $argv[0], $src->{chan})) {
-        privmsg($src->{svr}, $src->{chan}, "\001ACTION stares at database\001");
+        act($src->{svr}, $src->{chan}, "stares at database");
         return;
     } else {
         my $sth = $Auto::DB->prepare(
@@ -619,7 +619,7 @@ sub cmd_lastspoke {
                     $age . ", but hasn't said anything since.");
                 return;
             } default {
-                privmsg($src->{svr}, $src->{chan}, "\001ACTION stares at database (p2)\001");
+                act($src->{svr}, $src->{chan}, "stares at database (p2)");
                 return;
             }
         }
